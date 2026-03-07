@@ -1,6 +1,10 @@
-# SRR Salsero
+<p align="center">
+  <img src="assets/logo.png" alt="SRR Salsero" width="200" />
+</p>
 
-A Discord music bot that plays music from YouTube, Spotify, and SoundCloud in voice channels.
+<h1 align="center">SRR Salsero</h1>
+
+<p align="center">A Discord music bot that plays music from YouTube, Spotify, and SoundCloud in voice channels.</p>
 
 ## Features
 
