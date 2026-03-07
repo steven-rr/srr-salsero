@@ -4,6 +4,7 @@ const COLORS = {
   music: 0x1db954,
   error: 0xe74c3c,
   info: 0x3498db,
+  warning: 0xf39c12,
 };
 
 function createEmbed(options = {}) {

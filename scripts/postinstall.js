@@ -28,12 +28,11 @@ if (fs.existsSync(ytdlpPath)) {
     patched = true;
   }
 
-  // Replace the resolve method's flags to support search, playlists, and block YouTube Mixes
+  // Replace the resolve method's flags to support search, playlists, and mixes
   if (!code.includes('defaultSearch')) {
     code = code.replace(
       /async resolve\(url, options\) \{\s*\n\s*const info = await json\(url, \{[^}]+\}\)/,
       `async resolve(url, options) {
-    const isYtMix = /[?&]list=RD/.test(url) || /[?&]start_radio=1/.test(url);
     const flags = {
       dumpSingleJson: true,
       noWarnings: true,
@@ -43,15 +42,41 @@ if (fs.existsSync(ytdlpPath)) {
       simulate: true,
       flatPlaylist: true
     };
-    if (isYtMix) flags.noPlaylist = true;
     const info = await json(url, flags)`
+    );
+    patched = true;
+  }
+
+  // Fix playlist/mix entries missing extractor field (flatPlaylist returns minimal data)
+  if (code.includes('info.entries.map((i) => new YtDlpSong')) {
+    code = code.replace(
+      /if \(isPlaylist\(info\)\) \{\s*if \(info\.entries\.length === 0\)[^}]+\}\s*return new import_distube\.Playlist\(\s*\{[^}]+songs: info\.entries\.map\(\(i\) => new YtDlpSong\(this, i, options\)\)[^)]+\)[^)]*\)[^;]*;/s,
+      `if (isPlaylist(info)) {
+      const validEntries = info.entries.filter((i) => i && (i.id || i.url || i.webpage_url));
+      if (validEntries.length === 0) throw new import_distube.DisTubeError("YTDLP_ERROR", "The playlist is empty");
+      const fallbackExtractor = info.extractor || "youtube";
+      return new import_distube.Playlist(
+        {
+          source: fallbackExtractor,
+          songs: validEntries.map((i) => {
+            if (!i.extractor) i.extractor = i.ie_key || fallbackExtractor;
+            if (!i.webpage_url && !i.original_url && i.url) i.webpage_url = i.url;
+            return new YtDlpSong(this, i, options);
+          }),
+          id: (info.id || "mix").toString(),
+          name: info.title || "Mix",
+          url: info.webpage_url,
+          thumbnail: info.thumbnails?.[0]?.url
+        },
+        options
+      );`
     );
     patched = true;
   }
 
   if (patched) {
     fs.writeFileSync(ytdlpPath, code);
-    console.log('[postinstall] Patched @distube/yt-dlp: removed noCallHome, added search/playlist support');
+    console.log('[postinstall] Patched @distube/yt-dlp: removed noCallHome, added search/playlist/mix support');
   }
 }
 
