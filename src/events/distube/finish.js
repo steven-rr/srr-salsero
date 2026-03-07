@@ -8,7 +8,7 @@ module.exports = {
     clearProgressInterval(queue.id);
     const embed = createEmbed({
       title: 'Queue Finished',
-      description: 'No more songs to play. Leaving in 5 minutes if idle.',
+      description: 'No more songs to play. Leaving in 10 minutes if idle.',
       color: COLORS.info,
     });
 
@@ -20,7 +20,7 @@ module.exports = {
         queue.distube.voices.leave(queue.id);
         queue.textChannel?.send({ embeds: [createEmbed({
           title: 'Idle Timeout',
-          description: 'Left the voice channel after 5 minutes of inactivity.',
+          description: 'Left the voice channel after 10 minutes of inactivity.',
           color: COLORS.info,
         })] });
       }
