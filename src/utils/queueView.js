@@ -184,19 +184,21 @@ function buildQueueViewComponents(queue, page, selectedPos) {
       rows.push(navRow);
     }
 
-    // Number buttons
-    const firstRowCount = Math.min(songsOnPage, 5);
-    const row1 = new ActionRowBuilder();
-    for (let i = 0; i < firstRowCount; i++) {
-      const pos = start + i;
-      row1.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`qview_pick_${pos}_${clampedPage}`)
-          .setLabel(String(pos))
-          .setStyle(ButtonStyle.Secondary)
-      );
+    // Number buttons (only if there are queued songs)
+    if (songsOnPage > 0) {
+      const firstRowCount = Math.min(songsOnPage, 5);
+      const row1 = new ActionRowBuilder();
+      for (let i = 0; i < firstRowCount; i++) {
+        const pos = start + i;
+        row1.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`qview_pick_${pos}_${clampedPage}`)
+            .setLabel(String(pos))
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+      rows.push(row1);
     }
-    rows.push(row1);
 
     if (songsOnPage > 5) {
       const row2 = new ActionRowBuilder();
@@ -213,15 +215,30 @@ function buildQueueViewComponents(queue, page, selectedPos) {
     }
 
     // Action row last
-    const actionRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('qview_shuffle')
-        .setLabel('Shuffle')
-        .setStyle(ButtonStyle.Secondary),
+    const actionRow = new ActionRowBuilder();
+    if (songsOnPage > 0) {
+      actionRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId('qview_shuffle')
+          .setLabel('Shuffle')
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId('qview_add')
         .setLabel('Add')
         .setStyle(ButtonStyle.Success),
+    );
+    if (queue.songs.length > 1) {
+      actionRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId('qview_clear')
+          .setLabel('Clear')
+          .setStyle(ButtonStyle.Danger),
+      );
+    }
+    actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId('qview_close')
         .setLabel('Close')

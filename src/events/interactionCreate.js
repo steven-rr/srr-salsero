@@ -231,6 +231,14 @@ async function handleQueueViewButton(interaction, queue, distube) {
     return updateQueueView(interaction, queue, 1, null);
   }
 
+  // qview_clear - clear all queued songs, keep current playing
+  if (id === 'qview_clear') {
+    if (queue.songs.length > 1) {
+      queue.songs.splice(1);
+    }
+    return updateQueueView(interaction, queue, 1, null);
+  }
+
   // qview_pick_POS_PAGE - select a song
   if (id.startsWith('qview_pick_')) {
     const pos = parseInt(parts[2], 10);
