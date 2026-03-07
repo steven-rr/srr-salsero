@@ -3,6 +3,7 @@ const { createEmbed } = require('../../utils/embed');
 const { formatDuration } = require('../../utils/formatDuration');
 const { progressBar } = require('../../utils/progressBar');
 const { flushErrorsForGuild } = require('./error');
+const { clearIdleTimer } = require('../../utils/idleTimer');
 
 // Store the interval per guild so we can clear it when the song changes
 const progressIntervals = new Map();
@@ -121,6 +122,9 @@ function buildControlRows() {
 module.exports = {
   name: 'playSong',
   async execute(queue, song) {
+    // Cancel idle timeout if a new song starts
+    clearIdleTimer(queue.id);
+
     // Clear any previous progress interval for this guild
     clearProgressInterval(queue.id);
 
