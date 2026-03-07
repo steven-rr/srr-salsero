@@ -28,7 +28,6 @@ module.exports = {
         member: interaction.member,
         textChannel: interaction.channel,
       });
-      // DisTube playSong/addSong events handle the response
       if (!interaction.deleted) {
         await interaction.deleteReply().catch(() => {});
       }

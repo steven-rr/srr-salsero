@@ -13,10 +13,14 @@ module.exports = {
       } catch (error) {
         console.error(`Error executing ${interaction.commandName}:`, error);
         const reply = { content: 'Something went wrong running that command.', ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(reply);
-        } else {
-          await interaction.reply(reply);
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply(reply);
+          } else {
+            await interaction.reply(reply);
+          }
+        } catch (e) {
+          console.error('Failed to send error reply:', e.message);
         }
       }
       return;

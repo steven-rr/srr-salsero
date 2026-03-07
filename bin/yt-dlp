@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /opt/homebrew/Cellar/yt-dlp/2026.3.3/libexec/bin/python -m yt_dlp "$@"
