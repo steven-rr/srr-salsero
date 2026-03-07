@@ -1,4 +1,5 @@
 const { RepeatMode } = require('distube');
+const { formatDuration } = require('../utils/formatDuration');
 
 module.exports = {
   name: 'interactionCreate',
@@ -74,7 +75,42 @@ module.exports = {
             await interaction.reply({ content: 'Shuffled the queue.' });
             break;
 
+          case 'seek_restart':
+          case 'seek_back_10':
+          case 'seek_back_30':
+          case 'seek_forward_10':
+          case 'seek_forward_30': {
+            const { buildNowPlayingEmbed, buildControlRows } = require('../events/distube/playSong');
+            let newTime;
+            if (interaction.customId === 'seek_restart') {
+              newTime = 0;
+            } else {
+              const currentTime = queue.currentTime;
+              const delta = interaction.customId === 'seek_back_10' ? -10
+                : interaction.customId === 'seek_back_30' ? -30
+                : interaction.customId === 'seek_forward_10' ? 10 : 30;
+              newTime = Math.max(0, Math.min(currentTime + delta, queue.songs[0].duration - 1));
+            }
+            await distube.seek(interaction.guildId, newTime);
+            // Small delay so queue.currentTime reflects the new position
+            await new Promise(r => setTimeout(r, 200));
+            const embed = buildNowPlayingEmbed(queue, queue.songs[0]);
+            const components = buildControlRows();
+            await interaction.update({ embeds: [embed], components });
+            break;
+          }
+
           default:
+            // Queue pagination buttons
+            if (interaction.customId.startsWith('queue_prev_') || interaction.customId.startsWith('queue_next_')) {
+              const currentPage = parseInt(interaction.customId.split('_')[2], 10);
+              const newPage = interaction.customId.startsWith('queue_prev_') ? currentPage - 1 : currentPage + 1;
+              const { buildQueueEmbed, buildQueueButtons, SONGS_PER_PAGE } = require('../commands/queue');
+              const totalPages = Math.max(1, Math.ceil((queue.songs.length - 1) / SONGS_PER_PAGE));
+              const embed = buildQueueEmbed(queue, newPage);
+              const components = totalPages > 1 ? [buildQueueButtons(newPage, totalPages)] : [];
+              await interaction.update({ embeds: [embed], components });
+            }
             break;
         }
       } catch (error) {
