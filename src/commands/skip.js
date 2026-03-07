@@ -12,6 +12,7 @@ module.exports = {
     }
 
     try {
+      queue._manualSkip = true;
       if (queue.songs.length <= 1) {
         await interaction.client.distube.stop(interaction.guildId);
         return interaction.reply({ content: 'Skipped. No more songs in the queue.' });

@@ -66,9 +66,11 @@ async function fetchAllTracksAnon(playlistId, type) {
           name: meta.name,
           artists: (meta.artist || []).map(a => ({ name: a.name })),
           duration_ms: meta.duration,
-          thumbnail: meta.album?.cover_group?.image?.[0]?.file_id
-            ? "https://i.scdn.co/image/" + meta.album.cover_group.image[0].file_id
-            : undefined
+          album: {
+            images: meta.album?.cover_group?.image?.length
+              ? [{ url: "https://i.scdn.co/image/" + meta.album.cover_group.image[meta.album.cover_group.image.length - 1].file_id }]
+              : []
+          }
         };
       } catch (e) {
         return null;

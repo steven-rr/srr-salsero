@@ -77,40 +77,48 @@ module.exports = {
         switch (id) {
           case 'music_pause_resume':
             if (queue.paused) {
-              distube.resume(interaction.guildId);
               await interaction.reply({ content: 'Resumed the music.' });
+              distube.resume(interaction.guildId);
             } else {
-              distube.pause(interaction.guildId);
               await interaction.reply({ content: 'Paused the music.' });
+              distube.pause(interaction.guildId);
             }
             return;
 
-          case 'music_skip':
+          case 'music_skip': {
+            const skippedName = queue.songs[0]?.name || 'Unknown';
+            const nextName = queue.songs[1]?.name;
+            queue._manualSkip = true;
             if (queue.songs.length <= 1 && queue.autoplay === false) {
-              await distube.stop(interaction.guildId);
-              await interaction.reply({ content: 'Skipped. No more songs in the queue.' });
+              await interaction.reply({ content: `Skipped **${skippedName}**. No more songs in the queue.` });
+              await distube.stop(interaction.guildId).catch(() => {});
             } else {
-              await distube.skip(interaction.guildId);
-              await interaction.reply({ content: 'Skipped to the next song.' });
+              const msg = nextName
+                ? `Skipped **${skippedName}** → **${nextName}**`
+                : `Skipped **${skippedName}**`;
+              await interaction.reply({ content: msg });
+              await distube.skip(interaction.guildId).catch(() => {});
             }
             return;
+          }
 
           case 'music_stop':
-            await distube.stop(interaction.guildId);
+            queue._manualSkip = true;
             await interaction.reply({ content: 'Stopped the music and cleared the queue.' });
+            await distube.stop(interaction.guildId).catch(() => {});
             return;
 
           case 'music_loop': {
             const nextMode = (queue.repeatMode + 1) % 3;
-            distube.setRepeatMode(interaction.guildId, nextMode);
             const modeNames = ['Off', 'Song', 'Queue'];
             await interaction.reply({ content: `Loop mode: **${modeNames[nextMode]}**` });
+            distube.setRepeatMode(interaction.guildId, nextMode);
             return;
           }
 
           case 'music_shuffle':
-            await distube.shuffle(interaction.guildId);
             await interaction.reply({ content: 'Shuffled the queue.' });
+            await distube.shuffle(interaction.guildId).catch(() => {});
             return;
 
           case 'music_previous': {
@@ -190,10 +198,12 @@ module.exports = {
         }
 
       } catch (error) {
-        console.error('Button interaction error:', error);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
-        }
+        console.error('Button interaction error:', error.message);
+        try {
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: 'Something went wrong.', ephemeral: true });
+          }
+        } catch {}
       }
     }
   },

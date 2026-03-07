@@ -11,6 +11,7 @@ module.exports = {
       return interaction.reply({ content: 'Nothing is playing right now.', ephemeral: true });
     }
 
+    queue._manualSkip = true;
     await interaction.client.distube.stop(interaction.guildId);
     await interaction.reply({ content: 'Stopped the music and cleared the queue.' });
   },

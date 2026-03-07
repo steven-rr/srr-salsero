@@ -2,9 +2,13 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createEmbed } = require('../../utils/embed');
 const { formatDuration } = require('../../utils/formatDuration');
 const { progressBar } = require('../../utils/progressBar');
+const { flushErrorsForGuild } = require('./error');
 
 // Store the interval per guild so we can clear it when the song changes
 const progressIntervals = new Map();
+
+// Store the current Now Playing message per guild so we can delete stale ones
+const nowPlayingMessages = new Map();
 
 // Store song history per guild (last 3 songs)
 const songHistory = new Map();
@@ -125,6 +129,24 @@ module.exports = {
       addToHistory(queue.id, queue._previousSong);
     }
     queue._previousSong = song;
+    queue._songStartedAt = Date.now();
+
+    const voiceStatus = queue.voice?.connection?.state?.status || 'unknown';
+    const playerStatus = queue.voice?.audioPlayer?.state?.status || 'unknown';
+    console.log(`[playSong] "${song.name}" | duration=${song.duration} | thumbnail=${song.thumbnail ? 'yes' : 'no'} | source=${song.source} | voice=${voiceStatus} | player=${playerStatus}`);
+
+    // Delete the previous Now Playing message to avoid stale embeds after error skips
+    const prevMessage = nowPlayingMessages.get(queue.id);
+    if (prevMessage) {
+      prevMessage.delete().catch(() => {});
+      nowPlayingMessages.delete(queue.id);
+    }
+
+    // Check if this song is still the current one (race condition: another playSong may have fired)
+    if (queue._previousSong !== song) return;
+
+    // Flush any pending error messages so they appear above the Now Playing embed
+    flushErrorsForGuild(queue.id, queue.textChannel);
 
     const embed = buildNowPlayingEmbed(queue, song);
     const components = buildControlRows();
@@ -132,16 +154,24 @@ module.exports = {
 
     if (!message) return;
 
+    // After the async send, check again if we're still the current song
+    if (queue._previousSong !== song) {
+      message.delete().catch(() => {});
+      return;
+    }
+
+    nowPlayingMessages.set(queue.id, message);
+
     // Update the progress bar every 5 seconds
     const interval = setInterval(async () => {
       try {
         const currentQueue = queue.distube.getQueue(queue.id);
-        if (!currentQueue || currentQueue.songs[0]?.id !== song.id) {
+        if (!currentQueue || !currentQueue.songs.length || currentQueue._previousSong !== song) {
           clearProgressInterval(queue.id);
           return;
         }
         if (currentQueue.paused) return;
-        const updatedEmbed = buildNowPlayingEmbed(currentQueue, currentQueue.songs[0]);
+        const updatedEmbed = buildNowPlayingEmbed(currentQueue, song);
         await message.edit({ embeds: [updatedEmbed], components });
       } catch {
         clearProgressInterval(queue.id);
