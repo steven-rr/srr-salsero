@@ -6,6 +6,10 @@ const { loadEvents } = require('./events');
 loadCommands(client);
 loadEvents(client);
 
+client.on('error', (error) => {
+  console.error('Client error:', error.message);
+});
+
 process.on('unhandledRejection', (error) => {
   console.error('Unhandled rejection:', error.message);
 });

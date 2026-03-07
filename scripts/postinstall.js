@@ -55,13 +55,24 @@ if (fs.existsSync(ytdlpPath)) {
   }
 }
 
-// Patch @distube/spotify to fall back to scraping when API fails for playlists/albums
+// Patch @distube/spotify to use Spotify's internal spclient API for playlist tracks
 // Spotify's Feb 2026 API changes broke client credentials access to playlist tracks
+// The spclient API is not rate limited and returns all tracks with metadata
 const spotifyPath = path.join(__dirname, '..', 'node_modules', '@distube', 'spotify', 'dist', 'index.js');
 if (fs.existsSync(spotifyPath)) {
   let code = fs.readFileSync(spotifyPath, 'utf8');
   if (!code.includes('SPOTIFY_API_FALLBACK')) {
-    // Replace the playlist/album branch in getData to catch API errors and fall back to scraping
+    // Read the helper function from a separate file (avoids template literal escaping issues)
+    const helperFn = fs.readFileSync(path.join(__dirname, 'spotify-helper.js'), 'utf8');
+
+    // Insert helper function before the class
+    code = code.replace(
+      /var SpotifyPlugin = class/,
+      helperFn + '\nvar SpotifyPlugin = class'
+    );
+
+    // Replace the playlist/album branch in getData to use spclient FIRST (gets latest songs)
+    // Then fall back to standard API, then scraping
     code = code.replace(
       `    try {
       const { body } = await WEB_API[type === "album" ? "getAlbum" : type === "playlist" ? "getPlaylist" : "getArtist"](id);
@@ -75,34 +86,71 @@ if (fs.existsSync(spotifyPath)) {
     } catch (e) {
       throw apiError(e);
     }`,
-      `    try {
+      `    // SPOTIFY_API_FALLBACK: Use spclient as PRIMARY path for playlists/albums
+    // This fetches the most recently added tracks via Spotify's internal API
+    if (type === "playlist" || type === "album") {
+      try {
+        const anonData = await fetchAllTracksAnon(id, type);
+        if (anonData) {
+          const tracks = anonData.items
+            .map((item) => {
+              const t = type === "playlist" ? item.track : item;
+              if (!t || t.type !== "track") return null;
+              return new APITrack(t);
+            })
+            .filter(Boolean);
+          console.log("[SPOTIFY] Loaded " + tracks.length + " tracks via spclient (newest first)");
+          return {
+            type,
+            name: anonData.name,
+            thumbnail: anonData.thumbnail,
+            url: anonData.url,
+            tracks
+          };
+        }
+      } catch (e3) {
+        console.warn("[SPOTIFY] spclient failed, trying standard API:", e3.message);
+      }
+    }
+    try {
       const { body } = await WEB_API[type === "album" ? "getAlbum" : type === "playlist" ? "getPlaylist" : "getArtist"](id);
+      let allTracks = (await this.#getTracks(body)).filter((t) => t?.type === "track").map((t) => new APITrack(t));
+      if (type === "playlist") {
+        allTracks = allTracks.reverse().slice(0, 100);
+        console.log("[SPOTIFY] Loaded " + allTracks.length + " tracks (newest first) via standard API");
+      }
       return {
         type,
         name: body.name,
         thumbnail: body.images?.[0]?.url,
         url: body.external_urls?.spotify,
-        tracks: (await this.#getTracks(body)).filter((t) => t?.type === "track").map((t) => new APITrack(t))
+        tracks: allTracks
       };
     } catch (e) {
-      // SPOTIFY_API_FALLBACK: Fall back to scraping when API fails (Feb 2026 Spotify changes)
+      // Last resort: scraping
+      console.log("[SPOTIFY_SCRAPE] All APIs failed, using scraping last resort");
       if (type === "playlist" || type === "album") {
         try {
           const data = await INFO.getData(url);
           const thumbnail = data.coverArt?.sources?.[0]?.url;
+          let tracks = data.trackList.map((i) => ({
+            type: "track",
+            id: this.parseUrl(i.uri).id,
+            name: i.title,
+            artists: [{ name: i.subtitle }],
+            duration: i.duration,
+            thumbnail
+          }));
+          if (type === "playlist") {
+            tracks = tracks.reverse();
+            console.log("[SPOTIFY_SCRAPE] Reversed " + tracks.length + " tracks (newest first)");
+          }
           return {
             type,
             name: data.title,
             thumbnail,
             url,
-            tracks: data.trackList.map((i) => ({
-              type: "track",
-              id: this.parseUrl(i.uri).id,
-              name: i.title,
-              artists: [{ name: i.subtitle }],
-              duration: i.duration,
-              thumbnail
-            }))
+            tracks
           };
         } catch (e2) {
           throw apiError(e);
@@ -111,7 +159,60 @@ if (fs.existsSync(spotifyPath)) {
       throw apiError(e);
     }`
     );
+
+    // Fix refreshToken's fallback scraping (open.spotify.com no longer embeds tokens)
+    code = code.replace(
+      'await (0, import_undici.fetch)("https://open.spotify.com/")',
+      'await (0, import_undici.fetch)("https://open.spotify.com/embed/track/4uLU6hMCjMI75M1A2tKUQC")'
+    );
+
+    // Reverse tracks in the early scraping path (when _tokenAvailable is false)
+    code = code.replace(
+      `    if (!this._tokenAvailable) {
+      const data = await INFO.getData(url);
+      const thumbnail = data.coverArt?.sources?.[0]?.url;
+      return {
+        type,
+        name: data.title,
+        thumbnail,
+        url,
+        tracks: data.trackList.map((i) => ({
+          type: "track",
+          id: this.parseUrl(i.uri).id,
+          name: i.title,
+          artists: [{ name: i.subtitle }],
+          duration: i.duration,
+          thumbnail
+        }))
+      };
+    }`,
+      `    if (!this._tokenAvailable) {
+      console.log("[SPOTIFY_SCRAPE] tokenAvailable=false, using scraping fallback");
+      const data = await INFO.getData(url);
+      const thumbnail = data.coverArt?.sources?.[0]?.url;
+      let tracks = data.trackList.map((i) => ({
+        type: "track",
+        id: this.parseUrl(i.uri).id,
+        name: i.title,
+        artists: [{ name: i.subtitle }],
+        duration: i.duration,
+        thumbnail
+      }));
+      if (type === "playlist") {
+        tracks = tracks.reverse();
+        console.log("[SPOTIFY_SCRAPE] Reversed " + tracks.length + " tracks (newest first)");
+      }
+      return {
+        type,
+        name: data.title,
+        thumbnail,
+        url,
+        tracks
+      };
+    }`
+    );
+
     fs.writeFileSync(spotifyPath, code);
-    console.log('[postinstall] Patched @distube/spotify: added scraping fallback for playlists/albums');
+    console.log('[postinstall] Patched @distube/spotify: spclient API for newest playlist tracks');
   }
 }
