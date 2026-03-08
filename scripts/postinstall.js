@@ -106,7 +106,33 @@ if (fs.existsSync(ytdlpPath)) {
       simulate: true,
       flatPlaylist: true
     };
+    if (process.env.YTDLP_COOKIES) flags.cookies = process.env.YTDLP_COOKIES;
     const info = await json(url, flags)`
+    );
+    patched = true;
+  }
+
+  // Add cookies support to getStreamURL
+  if (!code.includes('YTDLP_COOKIES')) {
+    code = code.replace(
+      `const info = await json(song.url, {
+      dumpSingleJson: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      skipDownload: true,
+      simulate: true,
+      format: "ba/ba*"
+    })`,
+      `const streamFlags = {
+      dumpSingleJson: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      skipDownload: true,
+      simulate: true,
+      format: "ba/ba*"
+    };
+    if (process.env.YTDLP_COOKIES) streamFlags.cookies = process.env.YTDLP_COOKIES;
+    const info = await json(song.url, streamFlags)`
     );
     patched = true;
   }

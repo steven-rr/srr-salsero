@@ -13,6 +13,14 @@ const ytdlpDir = require('path').join(__dirname, '..', 'bin');
 process.env.YTDLP_DIR = ytdlpDir;
 process.env.YTDLP_DISABLE_DOWNLOAD = '1';
 
+// Write YouTube cookies file from env var (base64-encoded cookies.txt)
+if (process.env.YOUTUBE_COOKIES) {
+  const cookiesPath = '/tmp/cookies.txt';
+  require('fs').writeFileSync(cookiesPath, Buffer.from(process.env.YOUTUBE_COOKIES, 'base64').toString('utf8'));
+  process.env.YTDLP_COOKIES = cookiesPath;
+  console.log('[startup] YouTube cookies loaded');
+}
+
 // Verify ffmpeg works at startup
 try {
   const ffmpegVersion = execSync(`"${ffmpegPath}" -version`, { encoding: 'utf8', timeout: 5000 }).split('\n')[0];
