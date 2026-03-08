@@ -27,9 +27,15 @@ if (needsDownload) {
     console.log(`[postinstall] Downloading yt-dlp for ${platform}/${arch}...`);
     if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
     try {
-      execSync(`curl -L -o "${ytdlpBin}" "${url}"`, { stdio: 'inherit' });
+      execSync(`curl -L --fail -o "${ytdlpBin}" "${url}"`, { stdio: 'inherit', timeout: 60000 });
       fs.chmodSync(ytdlpBin, 0o755);
       console.log('[postinstall] yt-dlp downloaded successfully');
+      // Verify it's a real binary, not an error page
+      const header = fs.readFileSync(ytdlpBin, 'utf8').slice(0, 20);
+      if (header.startsWith('<!') || header.startsWith('<html')) {
+        fs.unlinkSync(ytdlpBin);
+        console.warn('[postinstall] Downloaded file was HTML, not a binary — removed');
+      }
     } catch (e) {
       console.warn('[postinstall] Failed to download yt-dlp:', e.message);
     }

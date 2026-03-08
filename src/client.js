@@ -1,7 +1,28 @@
 const ffmpegPath = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpegPath;
-process.env.YTDLP_DIR = require('path').join(__dirname, '..', 'bin');
+const ytdlpDir = require('path').join(__dirname, '..', 'bin');
+process.env.YTDLP_DIR = ytdlpDir;
 process.env.YTDLP_DISABLE_DOWNLOAD = '1';
+
+// Ensure yt-dlp binary exists at startup (handles Railway/Docker where postinstall may not persist)
+const fs = require('fs');
+const ytdlpBin = require('path').join(ytdlpDir, 'yt-dlp');
+if (!fs.existsSync(ytdlpBin) || fs.readFileSync(ytdlpBin, 'utf8').includes('homebrew')) {
+  const { execSync } = require('child_process');
+  const platform = process.platform;
+  const arch = process.arch;
+  let asset;
+  if (platform === 'linux' && arch === 'x64') asset = 'yt-dlp_linux';
+  else if (platform === 'linux' && arch === 'arm64') asset = 'yt-dlp_linux_aarch64';
+  else if (platform === 'darwin') asset = 'yt-dlp_macos';
+  if (asset) {
+    console.log(`[startup] Downloading yt-dlp for ${platform}/${arch}...`);
+    if (!fs.existsSync(ytdlpDir)) fs.mkdirSync(ytdlpDir, { recursive: true });
+    execSync(`curl -L --fail -o "${ytdlpBin}" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${asset}"`, { stdio: 'inherit', timeout: 60000 });
+    fs.chmodSync(ytdlpBin, 0o755);
+    console.log('[startup] yt-dlp ready');
+  }
+}
 
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { DisTube } = require('distube');
