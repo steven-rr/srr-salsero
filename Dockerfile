@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y ffmpeg curl build-essential python3 lib
 
 WORKDIR /app
 COPY package*.json ./
+COPY scripts/ scripts/
 RUN npm ci
 COPY . .
 
