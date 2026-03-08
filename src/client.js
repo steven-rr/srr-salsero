@@ -4,6 +4,18 @@ const ytdlpDir = require('path').join(__dirname, '..', 'bin');
 process.env.YTDLP_DIR = ytdlpDir;
 process.env.YTDLP_DISABLE_DOWNLOAD = '1';
 
+// Verify ffmpeg works at startup
+try {
+  const { execSync } = require('child_process');
+  const ffmpegVersion = execSync(`"${ffmpegPath}" -version`, { encoding: 'utf8', timeout: 5000 }).split('\n')[0];
+  console.log(`[startup] ffmpeg: ${ffmpegVersion}`);
+  // Check if opus codec is available
+  const codecs = execSync(`"${ffmpegPath}" -codecs 2>/dev/null | grep opus`, { encoding: 'utf8', timeout: 5000 }).trim();
+  console.log(`[startup] opus codec: ${codecs ? 'available' : 'MISSING'}`);
+} catch (e) {
+  console.error(`[startup] ffmpeg check FAILED:`, e.message);
+}
+
 // Ensure yt-dlp binary exists at startup (handles Railway/Docker where postinstall may not persist)
 const fs = require('fs');
 const ytdlpBin = require('path').join(ytdlpDir, 'yt-dlp');
@@ -114,6 +126,11 @@ client.distube.on('error', (_error, queue) => {
 client.distube.on('playSong', (queue) => {
   queue._errorDebounce = false;
   queue._manualSkip = false;
+});
+
+// Log ffmpeg debug output — captures stderr, spawn command, and exit codes
+client.distube.on('debug', (debug) => {
+  console.log(`[DISTUBE_DEBUG] ${debug}`);
 });
 
 module.exports = client;
