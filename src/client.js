@@ -1,4 +1,13 @@
-const ffmpegPath = require('ffmpeg-static');
+// Prefer system ffmpeg (avoids SIGSEGV with ffmpeg-static on some Linux containers)
+const { execSync } = require('child_process');
+let ffmpegPath;
+try {
+  ffmpegPath = execSync('which ffmpeg', { encoding: 'utf8', timeout: 3000 }).trim();
+  console.log(`[startup] Using system ffmpeg: ${ffmpegPath}`);
+} catch {
+  ffmpegPath = require('ffmpeg-static');
+  console.log(`[startup] Using ffmpeg-static: ${ffmpegPath}`);
+}
 process.env.FFMPEG_PATH = ffmpegPath;
 const ytdlpDir = require('path').join(__dirname, '..', 'bin');
 process.env.YTDLP_DIR = ytdlpDir;
@@ -6,7 +15,6 @@ process.env.YTDLP_DISABLE_DOWNLOAD = '1';
 
 // Verify ffmpeg works at startup
 try {
-  const { execSync } = require('child_process');
   const ffmpegVersion = execSync(`"${ffmpegPath}" -version`, { encoding: 'utf8', timeout: 5000 }).split('\n')[0];
   console.log(`[startup] ffmpeg: ${ffmpegVersion}`);
   // Check if opus codec is available
