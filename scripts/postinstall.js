@@ -2,14 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// Download a standalone yt-dlp binary if the current one won't work on this platform
+// Download a standalone yt-dlp binary if missing or not a real binary
 const binDir = path.join(__dirname, '..', 'bin');
 const ytdlpBin = path.join(binDir, 'yt-dlp');
 const needsDownload = (() => {
   if (!fs.existsSync(ytdlpBin)) return true;
-  // If it's a shell script referencing Homebrew, it won't work on Linux
-  const content = fs.readFileSync(ytdlpBin, 'utf8');
-  if (content.startsWith('#!/bin/bash') || content.includes('homebrew')) return true;
+  try {
+    const content = fs.readFileSync(ytdlpBin, 'utf8');
+    if (content.startsWith('#!/bin/bash') || content.includes('homebrew')) return true;
+  } catch { /* binary file, can't read as utf8 — that's fine */ }
   return false;
 })();
 
@@ -30,12 +31,6 @@ if (needsDownload) {
       execSync(`curl -L --fail -o "${ytdlpBin}" "${url}"`, { stdio: 'inherit', timeout: 60000 });
       fs.chmodSync(ytdlpBin, 0o755);
       console.log('[postinstall] yt-dlp downloaded successfully');
-      // Verify it's a real binary, not an error page
-      const header = fs.readFileSync(ytdlpBin, 'utf8').slice(0, 20);
-      if (header.startsWith('<!') || header.startsWith('<html')) {
-        fs.unlinkSync(ytdlpBin);
-        console.warn('[postinstall] Downloaded file was HTML, not a binary — removed');
-      }
     } catch (e) {
       console.warn('[postinstall] Failed to download yt-dlp:', e.message);
     }
@@ -69,6 +64,34 @@ if (fs.existsSync(ytdlpPath)) {
     patched = true;
   }
 
+  // Fix playlist/mix entries missing extractor field (flatPlaylist returns minimal data)
+  if (code.includes('info.entries.map((i) => new YtDlpSong')) {
+    // Patch entries.map to filter invalid entries and add fallback extractor
+    code = code.replace(
+      'info.entries.map((i) => new YtDlpSong(this, i, options))',
+      `info.entries.filter((i) => i && (i.id || i.url || i.webpage_url)).map((i) => {
+            if (!i.extractor) i.extractor = i.ie_key || info.extractor || "youtube";
+            if (!i.webpage_url && !i.original_url && i.url) i.webpage_url = i.url;
+            return new YtDlpSong(this, i, options);
+          })`
+    );
+    // Fix playlist source that may be undefined
+    code = code.replace(
+      'source: info.extractor,',
+      'source: info.extractor || "youtube",'
+    );
+    // Fix playlist id/name that may be undefined with mixes
+    code = code.replace(
+      'id: info.id.toString(),',
+      'id: (info.id || "mix").toString(),'
+    );
+    code = code.replace(
+      'name: info.title,',
+      'name: info.title || "Mix",'
+    );
+    patched = true;
+  }
+
   // Replace the resolve method's flags to support search, playlists, and mixes
   if (!code.includes('defaultSearch')) {
     code = code.replace(
@@ -84,28 +107,6 @@ if (fs.existsSync(ytdlpPath)) {
       flatPlaylist: true
     };
     const info = await json(url, flags)`
-    );
-    patched = true;
-  }
-
-  // Fix playlist/mix entries missing extractor field (flatPlaylist returns minimal data)
-  if (code.includes('info.entries.map((i) => new YtDlpSong')) {
-    code = code.replace(
-      'info.entries.map((i) => new YtDlpSong(this, i, options))',
-      `info.entries.filter((i) => i && (i.id || i.url || i.webpage_url)).map((i) => {
-            if (!i.extractor) i.extractor = i.ie_key || info.extractor || "youtube";
-            if (!i.webpage_url && !i.original_url && i.url) i.webpage_url = i.url;
-            return new YtDlpSong(this, i, options);
-          })`
-    );
-    // Also fix playlist id/name that may be undefined with mixes
-    code = code.replace(
-      'id: info.id.toString(),',
-      'id: (info.id || "mix").toString(),'
-    );
-    code = code.replace(
-      'name: info.title,',
-      'name: info.title || "Mix",'
     );
     patched = true;
   }
