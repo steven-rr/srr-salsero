@@ -91,26 +91,21 @@ if (fs.existsSync(ytdlpPath)) {
   // Fix playlist/mix entries missing extractor field (flatPlaylist returns minimal data)
   if (code.includes('info.entries.map((i) => new YtDlpSong')) {
     code = code.replace(
-      /if \(isPlaylist\(info\)\) \{\s*if \(info\.entries\.length === 0\)[^}]+\}\s*return new import_distube\.Playlist\(\s*\{[^}]+songs: info\.entries\.map\(\(i\) => new YtDlpSong\(this, i, options\)\)[^)]+\)[^)]*\)[^;]*;/s,
-      `if (isPlaylist(info)) {
-      const validEntries = info.entries.filter((i) => i && (i.id || i.url || i.webpage_url));
-      if (validEntries.length === 0) throw new import_distube.DisTubeError("YTDLP_ERROR", "The playlist is empty");
-      const fallbackExtractor = info.extractor || "youtube";
-      return new import_distube.Playlist(
-        {
-          source: fallbackExtractor,
-          songs: validEntries.map((i) => {
-            if (!i.extractor) i.extractor = i.ie_key || fallbackExtractor;
+      'info.entries.map((i) => new YtDlpSong(this, i, options))',
+      `info.entries.filter((i) => i && (i.id || i.url || i.webpage_url)).map((i) => {
+            if (!i.extractor) i.extractor = i.ie_key || info.extractor || "youtube";
             if (!i.webpage_url && !i.original_url && i.url) i.webpage_url = i.url;
             return new YtDlpSong(this, i, options);
-          }),
-          id: (info.id || "mix").toString(),
-          name: info.title || "Mix",
-          url: info.webpage_url,
-          thumbnail: info.thumbnails?.[0]?.url
-        },
-        options
-      );`
+          })`
+    );
+    // Also fix playlist id/name that may be undefined with mixes
+    code = code.replace(
+      'id: info.id.toString(),',
+      'id: (info.id || "mix").toString(),'
+    );
+    code = code.replace(
+      'name: info.title,',
+      'name: info.title || "Mix",'
     );
     patched = true;
   }
