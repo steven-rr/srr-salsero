@@ -1,5 +1,40 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
+// Download a standalone yt-dlp binary if the current one won't work on this platform
+const binDir = path.join(__dirname, '..', 'bin');
+const ytdlpBin = path.join(binDir, 'yt-dlp');
+const needsDownload = (() => {
+  if (!fs.existsSync(ytdlpBin)) return true;
+  // If it's a shell script referencing Homebrew, it won't work on Linux
+  const content = fs.readFileSync(ytdlpBin, 'utf8');
+  if (content.startsWith('#!/bin/bash') || content.includes('homebrew')) return true;
+  return false;
+})();
+
+if (needsDownload) {
+  const platform = process.platform;
+  const arch = process.arch;
+  let asset;
+  if (platform === 'linux' && arch === 'x64') asset = 'yt-dlp_linux';
+  else if (platform === 'linux' && arch === 'arm64') asset = 'yt-dlp_linux_aarch64';
+  else if (platform === 'darwin' && arch === 'arm64') asset = 'yt-dlp_macos';
+  else if (platform === 'darwin' && arch === 'x64') asset = 'yt-dlp_macos';
+
+  if (asset) {
+    const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${asset}`;
+    console.log(`[postinstall] Downloading yt-dlp for ${platform}/${arch}...`);
+    if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
+    try {
+      execSync(`curl -L -o "${ytdlpBin}" "${url}"`, { stdio: 'inherit' });
+      fs.chmodSync(ytdlpBin, 0o755);
+      console.log('[postinstall] yt-dlp downloaded successfully');
+    } catch (e) {
+      console.warn('[postinstall] Failed to download yt-dlp:', e.message);
+    }
+  }
+}
 
 // Patch @discordjs/voice to await DAVE library loading before identifying
 // Without this, the bot sends max_dave_protocol_version: 0 and Discord rejects the connection
