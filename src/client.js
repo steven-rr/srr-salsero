@@ -128,9 +128,12 @@ client.distube.on('playSong', (queue) => {
   queue._manualSkip = false;
 });
 
-// Log ffmpeg debug output — captures stderr, spawn command, and exit codes
+// Log DisTube debug + ffmpeg stderr/spawn/exit
 client.distube.on('debug', (debug) => {
   console.log(`[DISTUBE_DEBUG] ${debug}`);
+});
+client.distube.on('ffmpegDebug', (debug) => {
+  console.log(`[FFMPEG_DEBUG] ${debug}`);
 });
 
 module.exports = client;
