@@ -98,6 +98,18 @@ npm start
 | `/remove <position>` | Remove a song from the queue |
 | `/seek <seconds>` | Seek to a position in the current song |
 
+## Railway Deployment
+
+The bot can be deployed to [Railway](https://railway.com) for 24/7 hosting.
+
+1. Connect your GitHub repo to a new Railway project
+2. Add your environment variables in the Railway service settings (same as `.env` above)
+3. Add `YOUTUBE_COOKIES` — base64-encoded YouTube cookies.txt to bypass bot detection on cloud IPs:
+   ```bash
+   base64 -i cookies.txt | tr -d '\n' | pbcopy
+   ```
+4. Push to `main` — Railway auto-deploys via the included Dockerfile
+
 ## Supported Sources
 
 - **YouTube** — URLs and keyword search
